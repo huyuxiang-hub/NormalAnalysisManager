@@ -24,6 +24,22 @@
 #include "BufferMemMgr/IDataMemMgr.h"
 #include "Event/SimHeader.h"
 
+#include "DataCollSvc/IDataCollSvc.h"
+static IDataCollSvc* m_datacollsvc;
+static std::string key;
+#include "JunoTimer/IJunoTimerSvc.h"
+#include "JunoTimer/JunoTimer.h"
+static IJunoTimerSvc* m_timersvc;
+static JunoTimerPtr m_timer_step;
+static JunoTimerPtr m_timer_beginrun;
+static JunoTimerPtr m_timer_endrun;
+static JunoTimerPtr m_timer_beginevent;
+static JunoTimerPtr m_timer_endevent;
+static JunoTimerPtr m_timer_begintrack;
+static JunoTimerPtr m_timer_endtrack;
+
+
+
 DECLARE_TOOL(NormalAnaMgr);
 
 NormalAnaMgr::NormalAnaMgr(const std::string& name) 
@@ -44,8 +60,38 @@ NormalAnaMgr::BeginOfRunAction(const G4Run* /*aRun*/) {
     if (not m_flag_ntuple) {
         return;
     }
-    // check the RootWriter is Valid.
 
+
+//
+   SniperPtr<IDataCollSvc> _datacollsvc(this->getParent(), "DataCollSvc");
+    if (_datacollsvc.invalid()) {
+        LogError << "Can't Locate DataCollSvc. If you want to use it, please "
+                 << "enalbe it in your job option file."
+                 << std::endl;
+    }
+    m_datacollsvc = _datacollsvc.data();
+
+   SniperPtr<IJunoTimerSvc> _timersvc(this->getParent(), "JunoTimerSvc");
+    if (_timersvc.invalid()) {
+        LogError << "Can't Locate JunoTimerSvc. If you want to use it, please "
+                 << "enalbe it in your job option file."
+                 << std::endl;
+    }
+    m_timersvc = _timersvc.data();
+    m_timer_step = m_timersvc->get("steppingtimer");
+    m_timer_beginrun=m_timersvc->get("beginruntimer");
+    m_timer_endrun=m_timersvc->get("endruntimer");
+    m_timer_beginevent=m_timersvc->get("begineventtimer");
+    m_timer_endevent=m_timersvc->get("endeventtimer");
+    m_timer_begintrack=m_timersvc->get("begintracktimer");
+    m_timer_endtrack=m_timersvc->get("endtracktimer"); 
+//
+
+
+
+
+
+    // check the RootWriter is Valid.
     SniperPtr<RootWriter> svc(*getParent(), "RootWriter");
     if (svc.invalid()) {
         LogError << "Can't Locate RootWriter. If you want to use it, please "
@@ -53,51 +99,63 @@ NormalAnaMgr::BeginOfRunAction(const G4Run* /*aRun*/) {
                  << std::endl;
         return;
     }
+    m_timer_beginrun->start();
+
     m_evt_tree = svc->bookTree("SIMEVT/evt", "evt");
     m_evt_tree->Branch("evtID", &m_eventID, "evtID/I");
     m_evt_tree->Branch("nPhotons", &m_nPhotons, "nPhotons/I");
     m_evt_tree->Branch("totalPE", &m_totalPE, "totalPE/I");
+   /* 
     m_evt_tree->Branch("nPE", m_nPE, "nPE[nPhotons]/I");
     m_evt_tree->Branch("energy", m_energy, "energy[nPhotons]/F");
     m_evt_tree->Branch("hitTime", m_hitTime, "hitTime[nPhotons]/D");
     m_evt_tree->Branch("pmtID", m_pmtID, "pmtID[nPhotons]/I");
     m_evt_tree->Branch("PETrackID", m_peTrackID, "PETrackID[nPhotons]/I");
+   */
     m_evt_tree->Branch("edep", &m_edep, "edep/F");
     m_evt_tree->Branch("edepX", &m_edep_x, "edepX/F");
     m_evt_tree->Branch("edepY", &m_edep_y, "edepY/F");
     m_evt_tree->Branch("edepZ", &m_edep_z, "edepZ/F");
-    m_evt_tree->Branch("isCerenkov", m_isCerenkov, "isCerenkov[nPhotons]/I");
+  
+  /*  m_evt_tree->Branch("isCerenkov", m_isCerenkov, "isCerenkov[nPhotons]/I");
     m_evt_tree->Branch("isReemission", m_isReemission, "isReemission[nPhotons]/I");
     m_evt_tree->Branch("isOriginalOP", m_isOriginalOP, "isOriginalOP[nPhotons]/I");
     m_evt_tree->Branch("OriginalOPTime", m_OriginalOPTime, "OriginalOPTime[nPhotons]/D");
-
+  */
     // PMT
+   /* 
     m_evt_tree->Branch("nPMTs", &m_npmts_byPMT, "nPMTs/I");
     m_evt_tree->Branch("nPE_byPMT", m_nPE_byPMT, "nPE_byPMT[nPMTs]/I");
     m_evt_tree->Branch("PMTID_byPMT", m_PMTID_byPMT, "PMTID_byPMT[nPMTs]/I");
+   */
     // - 2015.10.10 Tao Lin <lintao@ihep.ac.cn>
     //   Hit's position
-    m_evt_tree->Branch("LocalPosX", m_localpos_x, "LocalPosX[nPhotons]/F");
+  /*  m_evt_tree->Branch("LocalPosX", m_localpos_x, "LocalPosX[nPhotons]/F");
     m_evt_tree->Branch("LocalPosY", m_localpos_y, "LocalPosY[nPhotons]/F");
     m_evt_tree->Branch("LocalPosZ", m_localpos_z, "LocalPosZ[nPhotons]/F");
+   */
     // - 2016.04.17 Tao Lin <lintao@ihep.ac.cn>
     //   Hit's direction
-    m_evt_tree->Branch("LocalDirX", m_localdir_x, "LocalDirX[nPhotons]/F");
+   /* m_evt_tree->Branch("LocalDirX", m_localdir_x, "LocalDirX[nPhotons]/F");
     m_evt_tree->Branch("LocalDirY", m_localdir_y, "LocalDirY[nPhotons]/F");
     m_evt_tree->Branch("LocalDirZ", m_localdir_z, "LocalDirZ[nPhotons]/F");
-
+    */
     // - 2017.03.01 Tao Lin <lintao@ihep.ac.cn>
     //   Hit's Global Position
-    m_evt_tree->Branch("GlobalPosX", m_globalpos_x, "GlobalPosX[nPhotons]/F");
+  /*  m_evt_tree->Branch("GlobalPosX", m_globalpos_x, "GlobalPosX[nPhotons]/F");
     m_evt_tree->Branch("GlobalPosY", m_globalpos_y, "GlobalPosY[nPhotons]/F");
     m_evt_tree->Branch("GlobalPosZ", m_globalpos_z, "GlobalPosZ[nPhotons]/F");
 
     m_evt_tree->Branch("BoundaryPosX", m_boundarypos_x, "BoundaryPosX[nPhotons]/F");
     m_evt_tree->Branch("BoundaryPosY", m_boundarypos_y, "BoundaryPosY[nPhotons]/F");
     m_evt_tree->Branch("BoundaryPosZ", m_boundarypos_z, "BoundaryPosZ[nPhotons]/F");
-
+  */
     m_step_no = new TH1I("stepno", "step number of optical photons", 1000, 0, 1000);
     svc->attach("SIMEVT", m_step_no);
+  
+    m_timer_beginrun->stop();  
+    key = "t_beginrun";
+    m_datacollsvc->collectData(key, m_timer_beginrun->elapsed()); 
 }
 
 void
@@ -108,10 +166,12 @@ NormalAnaMgr::EndOfRunAction(const G4Run* /*aRun*/) {
 void
 NormalAnaMgr::BeginOfEventAction(const G4Event* evt) {
     // initialize the evt tree
+    m_timer_beginevent->start();
+  
     m_eventID = evt->GetEventID();
     m_nPhotons = 0;
     m_totalPE = 0;
-    for(int i = 0; i < 2000000; i++) {
+   /* for(int i = 0; i < 2000000; i++) {
       m_nPE[i] = 0;
       m_energy[i] = 0;
       m_hitTime[i] = 0;
@@ -134,15 +194,22 @@ NormalAnaMgr::BeginOfEventAction(const G4Event* evt) {
       m_boundarypos_y[i] = 0.;
       m_boundarypos_z[i] = 0.;
     }
+    */
     m_edep = 0.;
     m_edep_x = 0.;
     m_edep_y = 0.;
     m_edep_z = 0.;
-    m_cache_bypmt.clear();
+   // m_cache_bypmt.clear();
+  
+    m_timer_beginevent->stop();
+    key = "t_beginevent";
+    m_datacollsvc->collectData(key, m_timer_beginevent->elapsed());
 }
 
 void
 NormalAnaMgr::EndOfEventAction(const G4Event* evt) {
+    m_timer_endevent->start();
+
     G4SDManager * SDman = G4SDManager::GetSDMpointer();
     G4int CollID = SDman->GetCollectionID("hitCollection");
 
@@ -167,14 +234,15 @@ NormalAnaMgr::EndOfEventAction(const G4Event* evt) {
             // if overflow, don't save anything into the array.
             // but still count the totalPE.
             if (i >= 2000000) { continue; }
-            m_energy[i] = (*col)[i]->GetKineticEnergy();
+           /* m_energy[i] = (*col)[i]->GetKineticEnergy();
             m_nPE[i] = (*col)[i]->GetCount();
             m_hitTime[i] = (*col)[i]->GetTime();
             m_pmtID[i] = (*col)[i]->GetPMTID();
 
-            m_cache_bypmt[m_pmtID[i]] += m_nPE[i];/*pmtID号与光子数的一个map*/ 
+            m_cache_bypmt[m_pmtID[i]] += m_nPE[i];
+           */
 
-            if ((*col)[i]->IsFromCerenkov()) {
+         /*   if ((*col)[i]->IsFromCerenkov()) {
                 LogDebug << "+++++ from cerenkov" << std::endl;
                 m_isCerenkov[i] = 1;
             }
@@ -206,17 +274,19 @@ NormalAnaMgr::EndOfEventAction(const G4Event* evt) {
             m_boundarypos_x[i] = boundary_pos.x();
             m_boundarypos_y[i] = boundary_pos.y();
             m_boundarypos_z[i] = boundary_pos.z();
+           */
         }
 
     }
 
-    m_npmts_byPMT = 0;
+  /*  m_npmts_byPMT = 0;
     for (std::map<int,int>::iterator it = m_cache_bypmt.begin();
             it != m_cache_bypmt.end(); ++it) {
         m_PMTID_byPMT[m_npmts_byPMT] = it->first;
         m_nPE_byPMT[m_npmts_byPMT] = it->second;
         ++m_npmts_byPMT;
     }
+   */
 
     m_totalPE = totPE;
 
@@ -229,15 +299,19 @@ NormalAnaMgr::EndOfEventAction(const G4Event* evt) {
     if (m_flag_ntuple and m_evt_tree) {
         m_evt_tree -> Fill();
     }
+    
     save_into_data_model();
+    m_timer_endevent->stop();
+    key = "t_endevent";
+    m_datacollsvc->collectData(key, m_timer_endevent->elapsed());
 }
 
 
 void
 NormalAnaMgr::PreUserTrackingAction(const G4Track* aTrack) {
-	/*每一个track到来的时候，如果它是第一个track，就设置一个UserInformation给这个track
-	如果不是第一个track，按照这个函数的功能，应该是有UserInformatica的，所以就提取出UserInformatica
-	然后判断是否为original OP，如果是的话，马上设置一个GlobalTime给这个track的UserInformation*/
+ //   m_timer_begintrack->reset();
+    m_timer_begintrack->start();   
+
 
     if(aTrack->GetParentID()==0 && aTrack->GetUserInformation()==0)
     {
@@ -248,6 +322,10 @@ NormalAnaMgr::PreUserTrackingAction(const G4Track* aTrack) {
     NormalTrackInfo* info = (NormalTrackInfo*)(aTrack->GetUserInformation());
 
     if (!info) {
+        
+        m_timer_begintrack->stop();
+        key = "t_begintrack";
+        m_datacollsvc->collectData(key, m_timer_begintrack->elapsed());
         return;
     }
 
@@ -258,8 +336,6 @@ NormalAnaMgr::PreUserTrackingAction(const G4Track* aTrack) {
 
     // original OP
     // set the info 
-    /*判断是否是original op ，如果是，则设置一个global的时间
-	original op的意思是是光子，而且它的母粒子不是光子*/ 
     if (aTrack->GetDefinition()->GetParticleName() == "opticalphoton" 
             and info->isOriginalOP()
             and info->getOriginalOPStartTime() == 0.0) {
@@ -267,7 +343,6 @@ NormalAnaMgr::PreUserTrackingAction(const G4Track* aTrack) {
         assert(info->getOriginalOPStartTime() == 0.0);
         LogDebug << "------ original OP" << std::endl;
         info->setOriginalOPStartTime(aTrack->GetGlobalTime());
-        /*GlobalTime这个时间是从event开始时的时间算起*/ 
     }
 
     // An example: Get the parent particle name from track info
@@ -277,10 +352,17 @@ NormalAnaMgr::PreUserTrackingAction(const G4Track* aTrack) {
         //        << " is " << parent_name
         //        << G4endl;
     }
+
+    m_timer_begintrack->stop();
+    key = "t_begintrack";
+    m_datacollsvc->collectData(key, m_timer_begintrack->elapsed());
 }
 
 void
 NormalAnaMgr::PostUserTrackingAction(const G4Track* aTrack) {
+ //    m_timer_endtrack->reset();   
+     m_timer_endtrack->start();
+
     if (aTrack->GetParentID() == 0) {
         // this is the primary particle
         const G4ThreeVector& pos = aTrack->GetPosition();
@@ -296,7 +378,11 @@ NormalAnaMgr::PostUserTrackingAction(const G4Track* aTrack) {
         NormalTrackInfo* info = (NormalTrackInfo*)(aTrack->GetUserInformation());
 
         if (!info) {
-            return;
+                m_timer_endtrack->stop();
+                key = "t_endtrack";
+                m_datacollsvc->collectData(key, m_timer_endtrack->elapsed());
+
+               return;
         }
 
         size_t nSeco = secondaries->size();
@@ -341,11 +427,17 @@ NormalAnaMgr::PostUserTrackingAction(const G4Track* aTrack) {
             }
         }
     }
+
+        m_timer_endtrack->stop();
+        key = "t_endtrack";
+        m_datacollsvc->collectData(key, m_timer_endtrack->elapsed());
 }
 
 void
 NormalAnaMgr::UserSteppingAction(const G4Step* step) {
-    G4Track* track = step->GetTrack();
+    m_timer_step->start();  
+ 
+   G4Track* track = step->GetTrack();
     G4double edep = step->GetTotalEnergyDeposit();
     if (edep > 0 and track->GetDefinition()->GetParticleName()!= "opticalphoton"
                  and track->GetMaterial()->GetName() == "LS") {
@@ -412,6 +504,11 @@ NormalAnaMgr::UserSteppingAction(const G4Step* step) {
 
         }
     }
+   
+     m_timer_step->stop();
+    key = "t_step";
+    m_datacollsvc->collectData(key, m_timer_step->elapsed());
+
 }
 
 bool NormalAnaMgr::save_into_data_model() {
