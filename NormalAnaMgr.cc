@@ -62,7 +62,7 @@ NormalAnaMgr::BeginOfRunAction(const G4Run* /*aRun*/) {
     }
 
 
-//
+/*
    SniperPtr<IDataCollSvc> _datacollsvc(this->getParent(), "DataCollSvc");
     if (_datacollsvc.invalid()) {
         LogError << "Can't Locate DataCollSvc. If you want to use it, please "
@@ -85,7 +85,7 @@ NormalAnaMgr::BeginOfRunAction(const G4Run* /*aRun*/) {
     m_timer_endevent=m_timersvc->get("endeventtimer");
     m_timer_begintrack=m_timersvc->get("begintracktimer");
     m_timer_endtrack=m_timersvc->get("endtracktimer"); 
-//
+*/
 
 
 
@@ -99,8 +99,8 @@ NormalAnaMgr::BeginOfRunAction(const G4Run* /*aRun*/) {
                  << std::endl;
         return;
     }
-    m_timer_beginrun->start();
-
+  //  m_timer_beginrun->start();
+    LogInfo<<"this is evt tree"<<std::endl;
     m_evt_tree = svc->bookTree("SIMEVT/evt", "evt");
     m_evt_tree->Branch("evtID", &m_eventID, "evtID/I");
     m_evt_tree->Branch("nPhotons", &m_nPhotons, "nPhotons/I");
@@ -153,9 +153,10 @@ NormalAnaMgr::BeginOfRunAction(const G4Run* /*aRun*/) {
     m_step_no = new TH1I("stepno", "step number of optical photons", 1000, 0, 1000);
     svc->attach("SIMEVT", m_step_no);
   
-    m_timer_beginrun->stop();  
+  /*  m_timer_beginrun->stop();  
     key = "t_beginrun";
     m_datacollsvc->collectData(key, m_timer_beginrun->elapsed()); 
+  */
 }
 
 void
@@ -166,7 +167,7 @@ NormalAnaMgr::EndOfRunAction(const G4Run* /*aRun*/) {
 void
 NormalAnaMgr::BeginOfEventAction(const G4Event* evt) {
     // initialize the evt tree
-    m_timer_beginevent->start();
+   // m_timer_beginevent->start();
   
     m_eventID = evt->GetEventID();
     m_nPhotons = 0;
@@ -201,14 +202,15 @@ NormalAnaMgr::BeginOfEventAction(const G4Event* evt) {
     m_edep_z = 0.;
    // m_cache_bypmt.clear();
   
-    m_timer_beginevent->stop();
+ /*   m_timer_beginevent->stop();
     key = "t_beginevent";
     m_datacollsvc->collectData(key, m_timer_beginevent->elapsed());
+  */
 }
 
 void
 NormalAnaMgr::EndOfEventAction(const G4Event* evt) {
-    m_timer_endevent->start();
+ //   m_timer_endevent->start();
 
     G4SDManager * SDman = G4SDManager::GetSDMpointer();
     G4int CollID = SDman->GetCollectionID("hitCollection");
@@ -301,16 +303,17 @@ NormalAnaMgr::EndOfEventAction(const G4Event* evt) {
     }
     
     save_into_data_model();
-    m_timer_endevent->stop();
+ /*   m_timer_endevent->stop();
     key = "t_endevent";
     m_datacollsvc->collectData(key, m_timer_endevent->elapsed());
+  */
 }
 
 
 void
 NormalAnaMgr::PreUserTrackingAction(const G4Track* aTrack) {
  //   m_timer_begintrack->reset();
-    m_timer_begintrack->start();   
+ //   m_timer_begintrack->start();   
 
 
     if(aTrack->GetParentID()==0 && aTrack->GetUserInformation()==0)
@@ -353,15 +356,16 @@ NormalAnaMgr::PreUserTrackingAction(const G4Track* aTrack) {
         //        << G4endl;
     }
 
-    m_timer_begintrack->stop();
+ /*   m_timer_begintrack->stop();
     key = "t_begintrack";
     m_datacollsvc->collectData(key, m_timer_begintrack->elapsed());
+  */
 }
 
 void
 NormalAnaMgr::PostUserTrackingAction(const G4Track* aTrack) {
  //    m_timer_endtrack->reset();   
-     m_timer_endtrack->start();
+ //    m_timer_endtrack->start();
 
     if (aTrack->GetParentID() == 0) {
         // this is the primary particle
@@ -428,14 +432,15 @@ NormalAnaMgr::PostUserTrackingAction(const G4Track* aTrack) {
         }
     }
 
-        m_timer_endtrack->stop();
+ /*       m_timer_endtrack->stop();
         key = "t_endtrack";
         m_datacollsvc->collectData(key, m_timer_endtrack->elapsed());
+  */
 }
 
 void
 NormalAnaMgr::UserSteppingAction(const G4Step* step) {
-    m_timer_step->start();  
+  //   m_timer_step->start();  
  
    G4Track* track = step->GetTrack();
     G4double edep = step->GetTotalEnergyDeposit();
@@ -505,10 +510,10 @@ NormalAnaMgr::UserSteppingAction(const G4Step* step) {
         }
     }
    
-     m_timer_step->stop();
+ /*    m_timer_step->stop();
     key = "t_step";
     m_datacollsvc->collectData(key, m_timer_step->elapsed());
-
+  */
 }
 
 bool NormalAnaMgr::save_into_data_model() {
