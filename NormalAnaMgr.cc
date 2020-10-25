@@ -12,6 +12,7 @@
 #include "G4EventManager.hh"
 #include "G4TrackingManager.hh"
 #include "G4OpticalPhoton.hh"
+#include "G4PhysicalVolumeStore.hh"
 
 #include "SniperKernel/SniperPtr.h"
 #include "SniperKernel/SniperDataPtr.h"
@@ -24,30 +25,6 @@
 #include "BufferMemMgr/IDataMemMgr.h"
 #include "Event/SimHeader.h"
 
-#include "DataCollSvc/IDataCollSvc.h"
-static IDataCollSvc* m_datacollsvc;
-static std::string key;
-#include "JunoTimer/IJunoTimerSvc.h"
-#include "JunoTimer/JunoTimer.h"
-static IJunoTimerSvc* m_timersvc;
-static JunoTimerPtr m_timer_step;
-static JunoTimerPtr m_timer_beginrun;
-static JunoTimerPtr m_timer_endrun;
-static JunoTimerPtr m_timer_beginevent;
-static JunoTimerPtr m_timer_endevent;
-static JunoTimerPtr m_timer_begintrack;
-static JunoTimerPtr m_timer_endtrack;
-
-static double t_step;
-static double t_beginrun;
-static double t_endrun;
-static double t_beginevent;
-static double t_endevent;
-static double t_begintrack;
-static double t_endtrack;
-
-
-
 DECLARE_TOOL(NormalAnaMgr);
 
 NormalAnaMgr::NormalAnaMgr(const std::string& name) 
@@ -56,7 +33,6 @@ NormalAnaMgr::NormalAnaMgr(const std::string& name)
     declProp("EnableNtuple", m_flag_ntuple=true);
     m_evt_tree = 0;
     m_step_no = 0;
-    declProp("EnableHitInfo",m_flag_hitinfo=false);
 }
 
 NormalAnaMgr::~NormalAnaMgr()
@@ -66,50 +42,11 @@ NormalAnaMgr::~NormalAnaMgr()
 
 void
 NormalAnaMgr::BeginOfRunAction(const G4Run* /*aRun*/) {
-    static double t_step=0;
-static double t_beginrun=0;
-static double t_endrun=0;
-static double t_beginevent=0;
-static double t_endevent=0;
-static double t_begintrack=0;
-static double t_endtrack=0;
-        
-    
-   
     if (not m_flag_ntuple) {
         return;
     }
-
-//
-   SniperPtr<IDataCollSvc> _datacollsvc(this->getParent(), "DataCollSvc");
-    if (_datacollsvc.invalid()) {
-        LogError << "Can't Locate DataCollSvc. If you want to use it, please "
-                 << "enalbe it in your job option file."
-                 << std::endl;
-    }
-    m_datacollsvc = _datacollsvc.data();
-
-   SniperPtr<IJunoTimerSvc> _timersvc(this->getParent(), "JunoTimerSvc");
-    if (_timersvc.invalid()) {
-        LogError << "Can't Locate JunoTimerSvc. If you want to use it, please "
-                 << "enalbe it in your job option file."
-                 << std::endl;
-    }
-    m_timersvc = _timersvc.data();
-    m_timer_step = m_timersvc->get("steppingtimer");
-    m_timer_beginrun=m_timersvc->get("beginruntimer");
-    m_timer_endrun=m_timersvc->get("endruntimer");
-    m_timer_beginevent=m_timersvc->get("begineventtimer");
-    m_timer_endevent=m_timersvc->get("endeventtimer");
-    m_timer_begintrack=m_timersvc->get("begintracktimer");
-    m_timer_endtrack=m_timersvc->get("endtracktimer"); 
-//
-
-
-
-
-
     // check the RootWriter is Valid.
+
     SniperPtr<RootWriter> svc(*getParent(), "RootWriter");
     if (svc.invalid()) {
         LogError << "Can't Locate RootWriter. If you want to use it, please "
@@ -117,94 +54,65 @@ static double t_endtrack=0;
                  << std::endl;
         return;
     }
-  //  m_timer_beginrun->start();
-    LogInfo<<"this is evt tree"<<std::endl;
     m_evt_tree = svc->bookTree("SIMEVT/evt", "evt");
+    m_evt_tree->Branch("evtID", &m_eventID, "evtID/I");
+    m_evt_tree->Branch("nPhotons", &m_nPhotons, "nPhotons/I");
+    m_evt_tree->Branch("totalPE", &m_totalPE, "totalPE/I");
+    m_evt_tree->Branch("nPE", m_nPE, "nPE[nPhotons]/I");
+    m_evt_tree->Branch("energy", m_energy, "energy[nPhotons]/F");
+    m_evt_tree->Branch("hitTime", m_hitTime, "hitTime[nPhotons]/D");
+    m_evt_tree->Branch("pmtID", m_pmtID, "pmtID[nPhotons]/I");
+    m_evt_tree->Branch("PETrackID", m_peTrackID, "PETrackID[nPhotons]/I");
     m_evt_tree->Branch("edep", &m_edep, "edep/F");
     m_evt_tree->Branch("edepX", &m_edep_x, "edepX/F");
     m_evt_tree->Branch("edepY", &m_edep_y, "edepY/F");
     m_evt_tree->Branch("edepZ", &m_edep_z, "edepZ/F");
-   
-   if(m_flag_hitinfo==true)
-   { 
-    m_evt_tree->Branch("nPhotons", &m_nPhotons, "nPhotons/I");
-    m_evt_tree->Branch("totalPE", &m_totalPE, "totalPE/I");  
-    m_evt_tree->Branch("nPE", &m_nPE);
-    m_evt_tree->Branch("energy",&m_energy);
-    m_evt_tree->Branch("hitTime",&m_hitTime);
-    m_evt_tree->Branch("pmtID", &m_pmtID);
-    m_evt_tree->Branch("PETrackID", &m_peTrackID);
+    m_evt_tree->Branch("isCerenkov", m_isCerenkov, "isCerenkov[nPhotons]/I");
+    m_evt_tree->Branch("isReemission", m_isReemission, "isReemission[nPhotons]/I");
+    m_evt_tree->Branch("isOriginalOP", m_isOriginalOP, "isOriginalOP[nPhotons]/I");
+    m_evt_tree->Branch("OriginalOPTime", m_OriginalOPTime, "OriginalOPTime[nPhotons]/D");
 
-    m_evt_tree->Branch("isCerenkov", &m_isCerenkov);
-    m_evt_tree->Branch("isReemission",&m_isReemission);
-    m_evt_tree->Branch("isOriginalOP", &m_isOriginalOP);
-    m_evt_tree->Branch("OriginalOPTime", &m_OriginalOPTime);
-  
     // PMT
-    
     m_evt_tree->Branch("nPMTs", &m_npmts_byPMT, "nPMTs/I");
-    m_evt_tree->Branch("nPE_byPMT", &m_nPE_byPMT);
-    m_evt_tree->Branch("PMTID_byPMT", &m_PMTID_byPMT);
-   
+    m_evt_tree->Branch("nPE_byPMT", m_nPE_byPMT, "nPE_byPMT[nPMTs]/I");
+    m_evt_tree->Branch("PMTID_byPMT", m_PMTID_byPMT, "PMTID_byPMT[nPMTs]/I");
     // - 2015.10.10 Tao Lin <lintao@ihep.ac.cn>
     //   Hit's position
-    m_evt_tree->Branch("LocalPosX",&m_localpos_x);
-    m_evt_tree->Branch("LocalPosY",&m_localpos_y);
-    m_evt_tree->Branch("LocalPosZ",&m_localpos_z);
-   
+    m_evt_tree->Branch("LocalPosX", m_localpos_x, "LocalPosX[nPhotons]/F");
+    m_evt_tree->Branch("LocalPosY", m_localpos_y, "LocalPosY[nPhotons]/F");
+    m_evt_tree->Branch("LocalPosZ", m_localpos_z, "LocalPosZ[nPhotons]/F");
     // - 2016.04.17 Tao Lin <lintao@ihep.ac.cn>
     //   Hit's direction
-    m_evt_tree->Branch("LocalDirX",&m_localdir_x);
-    m_evt_tree->Branch("LocalDirY",&m_localdir_y);
-    m_evt_tree->Branch("LocalDirZ",&m_localdir_z);
-    
+    m_evt_tree->Branch("LocalDirX", m_localdir_x, "LocalDirX[nPhotons]/F");
+    m_evt_tree->Branch("LocalDirY", m_localdir_y, "LocalDirY[nPhotons]/F");
+    m_evt_tree->Branch("LocalDirZ", m_localdir_z, "LocalDirZ[nPhotons]/F");
+
     // - 2017.03.01 Tao Lin <lintao@ihep.ac.cn>
     //   Hit's Global Position
-    m_evt_tree->Branch("GlobalPosX",&m_globalpos_x);
-    m_evt_tree->Branch("GlobalPosY",&m_globalpos_y);
-    m_evt_tree->Branch("GlobalPosZ",&m_globalpos_z);
+    m_evt_tree->Branch("GlobalPosX", m_globalpos_x, "GlobalPosX[nPhotons]/F");
+    m_evt_tree->Branch("GlobalPosY", m_globalpos_y, "GlobalPosY[nPhotons]/F");
+    m_evt_tree->Branch("GlobalPosZ", m_globalpos_z, "GlobalPosZ[nPhotons]/F");
 
-    m_evt_tree->Branch("BoundaryPosX",&m_boundarypos_x);
-    m_evt_tree->Branch("BoundaryPosY",&m_boundarypos_y);
-    m_evt_tree->Branch("BoundaryPosZ",&m_boundarypos_z);
-  
+    m_evt_tree->Branch("BoundaryPosX", m_boundarypos_x, "BoundaryPosX[nPhotons]/F");
+    m_evt_tree->Branch("BoundaryPosY", m_boundarypos_y, "BoundaryPosY[nPhotons]/F");
+    m_evt_tree->Branch("BoundaryPosZ", m_boundarypos_z, "BoundaryPosZ[nPhotons]/F");
+
     m_step_no = new TH1I("stepno", "step number of optical photons", 1000, 0, 1000);
     svc->attach("SIMEVT", m_step_no);
-    
-    }
-    
-    m_timer_beginrun->stop();  
-   // key = "t_beginrun";
-   // m_datacollsvc->collectData(key, m_timer_beginrun->elapsed()); 
-  
-   t_beginrun+=m_timer_beginrun->elapsed();  
-
-
 }
 
 void
 NormalAnaMgr::EndOfRunAction(const G4Run* /*aRun*/) {
- std::cout<<"step="<<t_step<<std::endl;
- std::cout<<"begin of track="<<t_begintrack<<std::endl;
- std::cout<<"end of track="<<t_endtrack<<std::endl;
- std::cout<<"begin of event="<<t_beginevent<<std::endl;
- std::cout<<"end of event="<<t_endevent<<std::endl;
- std::cout<<"begin of run="<<t_beginrun<<std::endl;
-
-
 
 }
 
 void
 NormalAnaMgr::BeginOfEventAction(const G4Event* evt) {
     // initialize the evt tree
-    m_timer_beginevent->start();
-  
     m_eventID = evt->GetEventID();
-  if(m_flag_hitinfo==true)
-   { m_nPhotons = 0;
+    m_nPhotons = 0;
     m_totalPE = 0;
-   /* for(int i = 0; i < 2000000; i++) {
+    for(int i = 0; i < 2000000; i++) {
       m_nPE[i] = 0;
       m_energy[i] = 0;
       m_hitTime[i] = 0;
@@ -227,48 +135,15 @@ NormalAnaMgr::BeginOfEventAction(const G4Event* evt) {
       m_boundarypos_y[i] = 0.;
       m_boundarypos_z[i] = 0.;
     }
-    */
-    m_nPE            .clear()                ;
-    m_energy         .clear()                ;
-    m_hitTime        .clear()                ;
-    m_pmtID	     .clear()   	     ;
-    m_peTrackID	     .clear()                ;
-    m_isCerenkov     .clear()                ;
-    m_isReemission   .clear()                ;
-    m_isOriginalOP   .clear()                ;
-    m_OriginalOPTime .clear()                ;    
- 
-      m_localpos_x	.clear();    
-      m_localpos_y	.clear();
-      m_localpos_z	.clear();
- 
-      m_localdir_x	.clear();
-      m_localdir_y	.clear();
-      m_localdir_z	.clear();
-
-      m_boundarypos_x	.clear();
-      m_boundarypos_y	.clear();
-      m_boundarypos_z	.clear();
-    }
-  
     m_edep = 0.;
     m_edep_x = 0.;
     m_edep_y = 0.;
     m_edep_z = 0.;
-   // m_cache_bypmt.clear();
-  
-    m_timer_beginevent->stop();
-    //key = "t_beginevent";
-    //m_datacollsvc->collectData(key, m_timer_beginevent->elapsed());
-   t_beginevent+=m_timer_beginevent->elapsed(); 
+    m_cache_bypmt.clear();
 }
 
 void
 NormalAnaMgr::EndOfEventAction(const G4Event* evt) {
-    m_timer_endevent->start();
-  if(m_flag_hitinfo==true)
-  {
-   
     G4SDManager * SDman = G4SDManager::GetSDMpointer();
     G4int CollID = SDman->GetCollectionID("hitCollection");
 
@@ -293,29 +168,20 @@ NormalAnaMgr::EndOfEventAction(const G4Event* evt) {
             // if overflow, don't save anything into the array.
             // but still count the totalPE.
             if (i >= 2000000) { continue; }
-            m_energy[i]=(*col)[i]->GetKineticEnergy();
-            m_nPE[i]   =(*col)[i]->GetCount();
-            m_hitTime[i]=(*col)[i]->GetTime();
-            m_pmtID[i]=(*col)[i]->GetPMTID();
+            m_energy[i] = (*col)[i]->GetKineticEnergy();
+            m_nPE[i] = (*col)[i]->GetCount();
+            m_hitTime[i] = (*col)[i]->GetTime();
+            m_pmtID[i] = (*col)[i]->GetPMTID();
 
             m_cache_bypmt[m_pmtID[i]] += m_nPE[i];
-           
 
             if ((*col)[i]->IsFromCerenkov()) {
                 LogDebug << "+++++ from cerenkov" << std::endl;
                 m_isCerenkov[i] = 1;
             }
-            else
-            {
-               m_isCerenkov[i]=0;
-            }
             if ((*col)[i]->IsReemission()) {
                 LogDebug << "+++++ reemission" << std::endl;
                 m_isReemission[i] = 1;
-            }
-            else
-            {
-               m_isReemission[i]=0;
             }
 
             m_isOriginalOP[i] = (*col)[i]->IsOriginalOP();
@@ -341,25 +207,19 @@ NormalAnaMgr::EndOfEventAction(const G4Event* evt) {
             m_boundarypos_x[i] = boundary_pos.x();
             m_boundarypos_y[i] = boundary_pos.y();
             m_boundarypos_z[i] = boundary_pos.z();
-           
         }
 
     }
 
     m_npmts_byPMT = 0;
     for (std::map<int,int>::iterator it = m_cache_bypmt.begin();
-            it != m_cache_bypmt.end(); ++it) 
-       {
-            m_PMTID_byPMT[m_npmts_byPMT] = it->first;
-            m_nPE_byPMT[m_npmts_byPMT] = it->second;
-            ++m_npmts_byPMT;
-       }
-     
-   
-     m_totalPE = totPE;
-   }
+            it != m_cache_bypmt.end(); ++it) {
+        m_PMTID_byPMT[m_npmts_byPMT] = it->first;
+        m_nPE_byPMT[m_npmts_byPMT] = it->second;
+        ++m_npmts_byPMT;
+    }
 
-
+    m_totalPE = totPE;
 
     if (m_edep>0) {
         m_edep_x /= m_edep;
@@ -370,22 +230,13 @@ NormalAnaMgr::EndOfEventAction(const G4Event* evt) {
     if (m_flag_ntuple and m_evt_tree) {
         m_evt_tree -> Fill();
     }
-    
     save_into_data_model();
-    m_timer_endevent->stop();
-    //key = "t_endevent";
-    // m_datacollsvc->collectData(key, m_timer_endevent->elapsed());
-   t_endevent+=m_timer_endevent->elapsed();
 }
 
 
 void
 NormalAnaMgr::PreUserTrackingAction(const G4Track* aTrack) {
- //   m_timer_begintrack->reset();
-     m_timer_begintrack->start();   
- if (m_flag_hitinfo==true){return;}
-      
-  
+
     if(aTrack->GetParentID()==0 && aTrack->GetUserInformation()==0)
     {
         NormalTrackInfo* anInfo = new NormalTrackInfo(aTrack);
@@ -395,23 +246,17 @@ NormalAnaMgr::PreUserTrackingAction(const G4Track* aTrack) {
     NormalTrackInfo* info = (NormalTrackInfo*)(aTrack->GetUserInformation());
 
     if (!info) {
-        
-        m_timer_begintrack->stop();
-        //key = "t_begintrack";
-        //m_datacollsvc->collectData(key, m_timer_begintrack->elapsed());
-        t_begintrack+=m_timer_begintrack->elapsed();      
- 
         return;
     }
 
-    if (aTrack->GetDefinition()->GetParticleName() == "opticalphoton" 
+    if (aTrack->GetDefinition() == G4OpticalPhoton::Definition()
             and aTrack->GetCreatorProcess()) {
         LogDebug << "###+++ "<< aTrack ->GetCreatorProcess()->GetProcessName() <<std::endl; 
     }
 
     // original OP
     // set the info 
-    if (aTrack->GetDefinition()->GetParticleName() == "opticalphoton" 
+    if (aTrack->GetDefinition() == G4OpticalPhoton::Definition()
             and info->isOriginalOP()
             and info->getOriginalOPStartTime() == 0.0) {
         // make sure this track info is not changed before.
@@ -427,80 +272,58 @@ NormalAnaMgr::PreUserTrackingAction(const G4Track* aTrack) {
         //        << " is " << parent_name
         //        << G4endl;
     }
-
-    m_timer_begintrack->stop();
-    //key = "t_begintrack";
-   // m_datacollsvc->collectData(key, m_timer_begintrack->elapsed());
-   t_begintrack+=m_timer_begintrack->elapsed();
 }
 
 void
 NormalAnaMgr::PostUserTrackingAction(const G4Track* aTrack) {
- //    m_timer_endtrack->reset();   
-      m_timer_endtrack->start();
- 
-if(m_flag_hitinfo==true) {return;}
-   
-    
-   
-
-  if (aTrack->GetParentID() == 0) 
-     {
+    if (aTrack->GetParentID() == 0) {
         // this is the primary particle
         const G4ThreeVector& pos = aTrack->GetPosition();
         LogDebug << "!!!Primary Track " << aTrack->GetTrackID() << ": ";
         LogDebug << "+ " << pos.x() << " " << pos.y() << " " << pos.z() << std::endl;
         LogDebug << "+ " << aTrack->GetKineticEnergy() << std::endl;
-      }
-   
-  G4TrackingManager* tm = G4EventManager::GetEventManager() 
+    }
+    G4TrackingManager* tm = G4EventManager::GetEventManager() 
                                             -> GetTrackingManager();
-  G4TrackVector* secondaries = tm->GimmeSecondaries();
+    G4TrackVector* secondaries = tm->GimmeSecondaries();
     if(secondaries)
-       {
-          NormalTrackInfo* info = (NormalTrackInfo*)(aTrack->GetUserInformation());
+    {
+        NormalTrackInfo* info = (NormalTrackInfo*)(aTrack->GetUserInformation());
 
-          if (!info) 
-            {
-                m_timer_endtrack->stop();
-                //key = "t_endtrack";
-                // m_datacollsvc->collectData(key, m_timer_endtrack->elapsed());
-                t_endtrack+=m_timer_endtrack->elapsed();
-                return;
-             }
+        if (!info) {
+            return;
+        }
 
-          size_t nSeco = secondaries->size();
-          if(nSeco>0)
-             {
-                 for(size_t i=0;i<nSeco;i++)
-                   { 
+        size_t nSeco = secondaries->size();
+        if(nSeco>0)
+        {
+            for(size_t i=0;i<nSeco;i++)
+            { 
                 // make sure the secondaries' track info is empty
                 // if already attached track info, skip it.
-                     if ((*secondaries)[i]->GetUserInformation()) 
-                     {
+                if ((*secondaries)[i]->GetUserInformation()) {
                     LogDebug << "The secondary already has user track info. skip creating new one" << std::endl;
                     continue;
-                     }
-                      NormalTrackInfo* infoNew = new NormalTrackInfo(info);
+                }
+                NormalTrackInfo* infoNew = new NormalTrackInfo(info);
                 // cerekov tag
                 if ((*secondaries)[i]->GetCreatorProcess() 
-                    and (*secondaries)[i]->GetCreatorProcess()->GetProcessName() == "Cerenkov") 
-                    {
+                    and (*secondaries)[i]->GetCreatorProcess()->GetProcessName() == "Cerenkov") {
                     infoNew->setFromCerenkov();
                     LogDebug << "### infoNew->setFromCerenkov()" << std::endl;
-                    }
+                }
                 // reemission tag
                 // + parent track is an OP
                 // + secondary is also an OP
                 // + the creator process is Scintillation
-                if (aTrack->GetDefinition()->GetParticleName() == "opticalphoton" 
-                    and (*secondaries)[i]->GetDefinition()->GetParticleName() == "opticalphoton"
+                if (aTrack->GetDefinition() == G4OpticalPhoton::Definition()
+                    and (*secondaries)[i]->GetDefinition() == G4OpticalPhoton::Definition()
                     and (*secondaries)[i]->GetCreatorProcess()->GetProcessName() == "Scintillation") {
                     infoNew->setReemission();
                 }
                 // original optical photon tag
-                if (aTrack->GetDefinition()->GetParticleName() != "opticalphoton" 
-                    and (*secondaries)[i]->GetDefinition()->GetParticleName() == "opticalphoton"
+                if (aTrack->GetDefinition() != G4OpticalPhoton::Definition() 
+                    and (*secondaries)[i]->GetDefinition() == G4OpticalPhoton::Definition()
                     ) {
                     LogDebug << "------ original OP" << std::endl;
                     infoNew->setOriginalOP();
@@ -508,28 +331,26 @@ if(m_flag_hitinfo==true) {return;}
 
                 // save parent track info
                 infoNew->setParentName(aTrack->GetDefinition()->GetParticleName());
-         
+
                 (*secondaries)[i]->SetUserInformation(infoNew);
-             }
-          }
-       }
-
-
-
-        m_timer_endtrack->stop();
-       // key = "t_endtrack";
-       // m_datacollsvc->collectData(key, m_timer_endtrack->elapsed());
-       t_endtrack+=m_timer_endtrack->elapsed();
+            }
+        }
+    }
 }
 
 void
 NormalAnaMgr::UserSteppingAction(const G4Step* step) {
-      m_timer_step->start();  
- 
-   G4Track* track = step->GetTrack();
+    G4Track* track = step->GetTrack();
     G4double edep = step->GetTotalEnergyDeposit();
-    if (edep > 0 and track->GetDefinition()->GetParticleName()!= "opticalphoton"
-                 and track->GetMaterial()->GetName() == "LS") {
+
+    // cache the material pointer, avoid comparison using string.
+    static G4Material* s_mat_LS = nullptr;
+    if (!s_mat_LS) {
+        s_mat_LS = G4Material::GetMaterial("LS");
+    }
+
+    if (edep > 0 and track->GetDefinition()!= G4OpticalPhoton::Definition()
+                 and track->GetMaterial() == s_mat_LS) {
         m_edep += edep;
         G4ThreeVector pos = step -> GetPreStepPoint() -> GetPosition();
         m_edep_x += edep * pos.x();
@@ -537,23 +358,16 @@ NormalAnaMgr::UserSteppingAction(const G4Step* step) {
         m_edep_z += edep * pos.z();
 
     }
-
-
-  if(m_flag_hitinfo==true) {return;}
-   
     // if the step number of optical photon bigger than X, mark it as killed
-    if (track->GetDefinition() == G4OpticalPhoton::Definition()) 
-    {
+    if (track->GetDefinition() == G4OpticalPhoton::Definition()) {
         G4int stepno = track->GetCurrentStepNumber();
 
-        if (track->GetTrackStatus() == fStopAndKill) 
-           {
+        if (track->GetTrackStatus() == fStopAndKill) {
             // if the opticalphoton is killed, save the step no
             m_step_no->Fill(stepno);
-           }
+        }
 
-        if (stepno >= 1000) 
-           {
+        if (stepno >= 1000) {
             G4String phyname;
             if (track->GetVolume()) { phyname = track->GetVolume()->GetName(); }
             const G4ThreeVector& tmppos = track->GetPosition();
@@ -566,7 +380,7 @@ NormalAnaMgr::UserSteppingAction(const G4Step* step) {
                     << " step number >= " << 1000
                     << std::endl;
             track->SetTrackStatus(fStopAndKill);
-           }
+        }
 
         // update the last hit acrylic surface
 
@@ -578,13 +392,20 @@ NormalAnaMgr::UserSteppingAction(const G4Step* step) {
         //             << postpoint->GetPhysicalVolume()->GetName() << " "
         //             << std::endl;
         // }
+
+        static G4PhysicalVolumeStore* s_physvol_store = nullptr;
+        static G4VPhysicalVolume* s_physvol_pAcrylic = nullptr;
+        static G4VPhysicalVolume* s_physvol_pInnerWater = nullptr;
+        if (!s_physvol_store) {
+            s_physvol_store = G4PhysicalVolumeStore::GetInstance();
+            s_physvol_pAcrylic = s_physvol_store->GetVolume("pAcrylic");
+            s_physvol_pInnerWater = s_physvol_store->GetVolume("pInnerWater");
+        }
+
         if(postpoint->GetStepStatus()==fGeomBoundary 
-        && prepoint->GetPhysicalVolume() 
-        && prepoint->GetPhysicalVolume()->GetName() == "pAcylic"
-        && postpoint->GetPhysicalVolume() 
-        && postpoint->GetPhysicalVolume()->GetName() == "pInnerWater"
-            ) 
-         {
+        && prepoint->GetPhysicalVolume() == s_physvol_pAcrylic
+        && postpoint->GetPhysicalVolume() == s_physvol_pInnerWater
+            ) {
             G4ThreeVector prepos = prepoint->GetPosition();
             G4ThreeVector postpos = postpoint->GetPosition();
             // LogInfo << " * "
@@ -595,19 +416,12 @@ NormalAnaMgr::UserSteppingAction(const G4Step* step) {
             //         << std::endl;
             // TODO use postpoint as the boundary between acrylic and water
             NormalTrackInfo* info = (NormalTrackInfo*)(track->GetUserInformation());
-            if (info) 
-               {
-                 info->setBoundaryPos(postpos);
-               }
+            if (info) {
+                info->setBoundaryPos(postpos);
+            }
 
-         }
-      }
-      
-    m_timer_step->stop();
-    //key = "t_step";
-    //m_datacollsvc->collectData(key, m_timer_step->elapsed());
-    t_step+=m_timer_step->elapsed();  
-
+        }
+    }
 }
 
 bool NormalAnaMgr::save_into_data_model() {
