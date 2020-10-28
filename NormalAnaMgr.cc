@@ -335,11 +335,7 @@ void
 NormalAnaMgr::PreUserTrackingAction(const G4Track* aTrack) {
      m_timer_begintrack->start(); 
 
-
-    if(m_flag_hitinfo==true)
-   {   
- 
-    if(aTrack->GetParentID()==0 && aTrack->GetUserInformation()==0)
+  if(aTrack->GetParentID()==0 && aTrack->GetUserInformation()==0)
     {
         NormalTrackInfo* anInfo = new NormalTrackInfo(aTrack);
         G4Track* theTrack = (G4Track*)aTrack;
@@ -362,6 +358,8 @@ NormalAnaMgr::PreUserTrackingAction(const G4Track* aTrack) {
 
     // original OP
     // set the info 
+if(m_flag_hitinfo==true)
+  {
     if (aTrack->GetDefinition() == G4OpticalPhoton::Definition()
             and info->isOriginalOP()
             and info->getOriginalOPStartTime() == 0.0) {
@@ -379,7 +377,7 @@ NormalAnaMgr::PreUserTrackingAction(const G4Track* aTrack) {
         //        << G4endl;
     }
 
- }
+  }
 
   m_timer_begintrack->stop();
         key = "t_begintrack";
@@ -391,8 +389,7 @@ NormalAnaMgr::PostUserTrackingAction(const G4Track* aTrack) {
  
   m_timer_endtrack->start();
  
-if(m_flag_hitinfo==true)
- {
+
    if (aTrack->GetParentID() == 0) {
         // this is the primary particle
         const G4ThreeVector& pos = aTrack->GetPosition();
@@ -420,6 +417,7 @@ if(m_flag_hitinfo==true)
         {
             for(size_t i=0;i<nSeco;i++)
             { 
+             
                 // make sure the secondaries' track info is empty
                 // if already attached track info, skip it.
                 if ((*secondaries)[i]->GetUserInformation()) {
@@ -427,6 +425,8 @@ if(m_flag_hitinfo==true)
                     continue;
                 }
                 NormalTrackInfo* infoNew = new NormalTrackInfo(info);
+               if(m_flag_hitinfo==true)
+               {
                 // cerekov tag
                 if ((*secondaries)[i]->GetCreatorProcess() 
                     and (*secondaries)[i]->GetCreatorProcess()->GetProcessName() == "Cerenkov") {
@@ -449,7 +449,7 @@ if(m_flag_hitinfo==true)
                     LogDebug << "------ original OP" << std::endl;
                     infoNew->setOriginalOP();
                 }
-
+                }
                 // save parent track info
                 infoNew->setParentName(aTrack->GetDefinition()->GetParticleName());
 
@@ -457,7 +457,7 @@ if(m_flag_hitinfo==true)
             }
         }
     }
-  }
+  
                 m_timer_endtrack->stop();
                 key = "t_endtrack";
                 m_datacollsvc->collectData(key, m_timer_endtrack->elapsed());
