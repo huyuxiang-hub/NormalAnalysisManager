@@ -1065,13 +1065,7 @@ if __name__ == "__main__":
     import RootWriter
     rootwriter = task.createSvc("RootWriter")
 
-    rootwriter.property("Output").set({"SIMEVT":args.user_output,"DCS":"dcs.root"})
-
-    # = DataCollSvc =
-    print("== Data Collector Svc ==")
-    import DataCollSvc
-    data_coll_svc = task.createSvc("DataCollSvc")
-
+    rootwriter.property("Output").set({"SIMEVT":args.user_output})
 
     # = global time =
     global_time_enabled = args.global_event_rate > 0.
