@@ -63,11 +63,12 @@ NormalAnaMgr::BeginOfRunAction(const G4Run* /*aRun*/) {
     m_evt_tree->Branch("edepX", &m_edep_x, "edepX/F");
     m_evt_tree->Branch("edepY", &m_edep_y, "edepY/F");
     m_evt_tree->Branch("edepZ", &m_edep_z, "edepZ/F");
-  
+    m_evt_tree->Branch("nPhotons", &m_nPhotons, "nPhotons/I");
+    m_evt_tree->Branch("totalPE", &m_totalPE, "totalPE/I");     
+
+ 
    if(m_flag_hitinfo==true)
    {
-    m_evt_tree->Branch("nPhotons", &m_nPhotons, "nPhotons/I");
-    m_evt_tree->Branch("totalPE", &m_totalPE, "totalPE/I");
     m_evt_tree->Branch("nPE", &m_nPE);
     m_evt_tree->Branch("energy", &m_energy);
     m_evt_tree->Branch("hitTime",&m_hitTime);
@@ -126,12 +127,10 @@ NormalAnaMgr::BeginOfEventAction(const G4Event* evt) {
     m_edep_x = 0.;
     m_edep_y = 0.;
     m_edep_z = 0.;
- if(m_flag_hitinfo==true)
-   {
     m_nPhotons = 0;
     m_totalPE = 0;
-
-
+ if(m_flag_hitinfo==true)
+   {
     m_nPE            .clear()                ;
     m_energy         .clear()                ;
     m_hitTime        .clear()                ;
@@ -167,6 +166,39 @@ NormalAnaMgr::BeginOfEventAction(const G4Event* evt) {
 
 void
 NormalAnaMgr::EndOfEventAction(const G4Event* evt) {
+
+
+if(m_flag_hitinfo==false)
+{
+    G4SDManager * SDman = G4SDManager::GetSDMpointer();
+    G4int CollID = SDman->GetCollectionID("hitCollection");
+
+    junoHit_PMT_Collection* col = 0;
+    G4HCofThisEvent * HCE = evt->GetHCofThisEvent();
+    if (!HCE or CollID<0) {
+        LogError << "No hits collection found." << std::endl;
+    } else {
+        col = (junoHit_PMT_Collection*)(HCE->GetHC(CollID));
+    }
+
+    int totPE = 0;
+    if (col) {
+        int n_hit = col->entries();
+        m_nPhotons = n_hit;
+        if (n_hit > 2000000) { m_nPhotons = 2000000; }
+        for (int i = 0; i < n_hit; ++i) {
+            totPE += (*col)[i]->GetCount();
+        }  
+         m_totalPE = totPE;
+     }
+    
+
+}
+
+
+
+
+
 
 if(m_flag_hitinfo==true)
  {
